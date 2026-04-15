@@ -25,6 +25,7 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryMapper categoryMapper;
 
     @Override
+    @Transactional
     public CategoryDto create(NewCategoryDto newCategoryDto) {
         Category category = categoryMapper.toEntity(newCategoryDto);
         try {
@@ -35,6 +36,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Transactional
     public void delete(Long catId) {
         if (!categoryRepository.existsById(catId)) {
             throw new NotFoundException("Category with id=" + catId + " was not found");
