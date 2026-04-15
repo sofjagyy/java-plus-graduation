@@ -12,7 +12,7 @@
     </parent>
 
     <groupId>ru.practicum</groupId>
-    <artifactId>stat-server</artifactId>
+    <artifactId>stats-server</artifactId>
     <version>0.0.1-SNAPSHOT</version>
 
     <dependencies>
