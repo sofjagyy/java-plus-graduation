@@ -1,11 +1,15 @@
 package ru.practicum.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -63,5 +67,49 @@ public class GeneralExceptionHandler {
         String message = e.getMessage();
         log.error("{}. {}", reason, message);
         return new ErrorResponse(HttpStatus.CONFLICT, reason, message);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleConstraintViolation(ConstraintViolationException e) {
+        String reason = "Incorrectly made request.";
+        String message = e.getMessage();
+        log.error("{}. {}", reason, message);
+        return new ErrorResponse(HttpStatus.BAD_REQUEST, reason, message);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleMissingParam(MissingServletRequestParameterException e) {
+        String reason = "Incorrectly made request.";
+        String message = e.getMessage();
+        log.error("{}. {}", reason, message);
+        return new ErrorResponse(HttpStatus.BAD_REQUEST, reason, message);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleNotReadable(HttpMessageNotReadableException e) {
+        String reason = "Incorrectly made request.";
+        String message = e.getMessage();
+        log.error("{}. {}", reason, message);
+        return new ErrorResponse(HttpStatus.BAD_REQUEST, reason, message);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        String reason = "Incorrectly made request.";
+        String message = e.getMessage();
+        log.error("{}. {}", reason, message);
+        return new ErrorResponse(HttpStatus.BAD_REQUEST, reason, message);
+    }
+
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ErrorResponse handleGeneral(Exception e) {
+        String reason = "An unexpected error occurred.";
+        log.error("{}. {}", reason, e.getMessage(), e);
+        return new ErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, reason, e.getMessage());
     }
 }

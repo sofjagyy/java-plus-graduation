@@ -13,6 +13,8 @@ import ru.practicum.dto.EndpointHitDto;
 import ru.practicum.dto.ViewStatsDto;
 
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -40,10 +42,14 @@ public class StatClientImpl implements StatClient {
 
     @Override
     public List<ViewStatsDto> getStat(LocalDateTime start, LocalDateTime end, List<String> uris, Boolean unique) {
-        String query = "start=" + start.format(FORMATTER) + "&end=" + end.format(FORMATTER);
+        String startEncoded = URLEncoder.encode(start.format(FORMATTER), StandardCharsets.UTF_8);
+        String endEncoded = URLEncoder.encode(end.format(FORMATTER), StandardCharsets.UTF_8);
+        String query = "start=" + startEncoded + "&end=" + endEncoded;
 
         if (uris != null && !uris.isEmpty()) {
-            query += "&uris=" + String.join("&uris=", uris);
+            for (String u : uris) {
+                query += "&uris=" + URLEncoder.encode(u, StandardCharsets.UTF_8);
+            }
         }
         if (unique != null) {
             query += "&unique=" + unique;

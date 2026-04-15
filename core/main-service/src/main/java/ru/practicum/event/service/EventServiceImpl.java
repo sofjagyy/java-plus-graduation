@@ -367,12 +367,16 @@ public class EventServiceImpl implements EventService {
     }
 
     private void sendStat(HttpServletRequest request) {
-        EndpointHitDto hit = new EndpointHitDto();
-        hit.setApp("ewm-main-service");
-        hit.setUri(request.getRequestURI());
-        hit.setIp(request.getRemoteAddr());
-        hit.setTimestamp(LocalDateTime.now().format(FORMATTER));
-        statClient.hit(hit);
+        try {
+            EndpointHitDto hit = new EndpointHitDto();
+            hit.setApp("ewm-main-service");
+            hit.setUri(request.getRequestURI());
+            hit.setIp(request.getRemoteAddr());
+            hit.setTimestamp(LocalDateTime.now().format(FORMATTER));
+            statClient.hit(hit);
+        } catch (Exception e) {
+            log.error("Error sending stat", e);
+        }
     }
 
     private List<EventFullDto> makeEventFullDtoList(List<Event> events) {
