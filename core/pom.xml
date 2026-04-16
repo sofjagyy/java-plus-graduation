@@ -16,6 +16,10 @@
     <packaging>pom</packaging>
 
     <modules>
+        <module>user-service</module>
+        <module>event-service</module>
+        <module>request-service</module>
+        <module>feature-service</module>
         <module>main-service</module>
     </modules>
 

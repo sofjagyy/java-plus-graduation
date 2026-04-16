@@ -13,11 +13,18 @@ services:
   config-server:
     build: ./infra/config-server
     container_name: config-server
+    ports:
+      - "8888:8888"
     depends_on:
       discovery-server:
         condition: service_healthy
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   gateway-server:
     build: ./infra/gateway-server
@@ -28,7 +35,7 @@ services:
       discovery-server:
         condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
 
@@ -58,7 +65,7 @@ services:
       discovery-server:
         condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
 
@@ -77,15 +84,54 @@ services:
       timeout: 5s
       retries: 5
 
-  ewm-service:
-    build: ./core/main-service
-    container_name: ewm-service
+  user-service:
+    build: ./core/user-service
+    container_name: user-service
     depends_on:
       ewm-db:
         condition: service_healthy
       discovery-server:
         condition: service_healthy
       config-server:
-        condition: service_started
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+
+  event-service:
+    build: ./core/event-service
+    container_name: event-service
+    depends_on:
+      ewm-db:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+
+  request-service:
+    build: ./core/request-service
+    container_name: request-service
+    depends_on:
+      ewm-db:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+
+  feature-service:
+    build: ./core/feature-service
+    container_name: feature-service
+    depends_on:
+      ewm-db:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
