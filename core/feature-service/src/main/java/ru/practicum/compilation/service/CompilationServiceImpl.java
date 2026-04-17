@@ -40,6 +40,7 @@ public class CompilationServiceImpl implements CompilationService {
 
         Compilation compilation = compilationMapper.toEntity(newCompilationDto);
         if (newCompilationDto.getEvents() != null && !newCompilationDto.getEvents().isEmpty()) {
+            syncEvents(newCompilationDto.getEvents());
             List<Event> events = eventRepository.findAllById(newCompilationDto.getEvents());
             compilation.setEvents(new HashSet<>(events));
         }
@@ -72,6 +73,7 @@ public class CompilationServiceImpl implements CompilationService {
         }
 
         if (updateCompilationDto.getEvents() != null) {
+            syncEvents(updateCompilationDto.getEvents());
             List<Event> events = eventRepository.findAllById(updateCompilationDto.getEvents());
             compilation.setEvents(new HashSet<>(events));
         }
@@ -119,6 +121,16 @@ public class CompilationServiceImpl implements CompilationService {
         }
         dto.setEvents(events);
         return dto;
+    }
+
+    private void syncEvents(List<Long> eventIds) {
+        for (Long eventId : eventIds) {
+            if (!eventRepository.existsById(eventId)) {
+                Event event = new Event();
+                event.setId(eventId);
+                eventRepository.save(event);
+            }
+        }
     }
 
     private Compilation getCompilationByIdOrThrow(Long compId) {

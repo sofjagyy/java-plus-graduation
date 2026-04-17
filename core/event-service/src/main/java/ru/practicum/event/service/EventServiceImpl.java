@@ -26,6 +26,7 @@ import ru.practicum.exception.ValidationException;
 import ru.practicum.request.client.RequestFeignClient;
 import ru.practicum.request.dto.ConfirmedCountDto;
 import ru.practicum.user.client.UserFeignClient;
+import ru.practicum.user.dto.UserDto;
 import ru.practicum.user.model.User;
 import ru.practicum.user.repository.UserRepository;
 
@@ -299,8 +300,14 @@ public class EventServiceImpl implements EventService {
     }
 
     private User checkUser(Long userId) {
-        userFeignClient.getUser(userId);
-        return userRepository.getReferenceById(userId);
+        UserDto userDto = userFeignClient.getUser(userId);
+        return userRepository.findById(userId).orElseGet(() -> {
+            User user = new User();
+            user.setId(userDto.getId());
+            user.setName(userDto.getName());
+            user.setEmail(userDto.getEmail());
+            return userRepository.save(user);
+        });
     }
 
     private LocalDateTime parseTime(String time) {

@@ -63,7 +63,9 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
             throw new ConflictException("Достигнут лимит запросов на участие");
         }
 
-        userFeignClient.getUser(userId);
+        UserDto userDto = userFeignClient.getUser(userId);
+        syncUser(userDto);
+        syncEvent(event.getId());
 
         var user = userRepository.getReferenceById(userId);
         var eventEntity = eventRepository.getReferenceById(event.getId());
@@ -176,5 +178,23 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
         return views.stream()
                 .map(v -> new ConfirmedCountDto(v.getEventId(), v.getCount()))
                 .collect(Collectors.toList());
+    }
+
+    private void syncUser(UserDto userDto) {
+        if (!userRepository.existsById(userDto.getId())) {
+            ru.practicum.user.model.User user = new ru.practicum.user.model.User();
+            user.setId(userDto.getId());
+            user.setName(userDto.getName());
+            user.setEmail(userDto.getEmail());
+            userRepository.save(user);
+        }
+    }
+
+    private void syncEvent(Long eventId) {
+        if (!eventRepository.existsById(eventId)) {
+            ru.practicum.event.model.Event event = new ru.practicum.event.model.Event();
+            event.setId(eventId);
+            eventRepository.save(event);
+        }
     }
 }
