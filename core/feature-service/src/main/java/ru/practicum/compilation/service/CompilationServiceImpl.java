@@ -124,12 +124,19 @@ public class CompilationServiceImpl implements CompilationService {
     }
 
     private void syncEvents(List<Long> eventIds) {
-        for (Long eventId : eventIds) {
-            if (!eventRepository.existsById(eventId)) {
-                Event event = new Event();
-                event.setId(eventId);
-                eventRepository.save(event);
-            }
+        List<Long> existingIds = eventRepository.findAllById(eventIds).stream()
+                .map(Event::getId)
+                .toList();
+        List<Event> missing = eventIds.stream()
+                .filter(id -> !existingIds.contains(id))
+                .map(id -> {
+                    Event event = new Event();
+                    event.setId(id);
+                    return event;
+                })
+                .toList();
+        if (!missing.isEmpty()) {
+            eventRepository.saveAll(missing);
         }
     }
 
