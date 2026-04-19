@@ -45,7 +45,7 @@ public class SimilarityService {
         userWeights.put(userId, newWeight);
 
         double oldSumA = eventWeightSums.getOrDefault(eventId, 0.0);
-        double newSumA = oldSumA - oldWeight * oldWeight + newWeight * newWeight;
+        double newSumA = oldSumA - oldWeight + newWeight;
         eventWeightSums.put(eventId, newSumA);
 
         Set<Long> allEvents = eventUserWeights.keySet();
@@ -61,20 +61,22 @@ public class SimilarityService {
             double newMin = Math.min(newWeight, otherWeight);
             double delta = newMin - oldMin;
 
-            if (delta == 0) continue;
-
             long first = Math.min(eventId, otherEventId);
             long second = Math.max(eventId, otherEventId);
 
             double currentSmin = getMinWeightSum(first, second);
-            putMinWeightSum(first, second, currentSmin + delta);
+            if (delta != 0) {
+                putMinWeightSum(first, second, currentSmin + delta);
+            }
+
+            double updatedSmin = getMinWeightSum(first, second);
+            if (updatedSmin <= 0) continue;
 
             double sA = eventWeightSums.getOrDefault(eventId, 0.0);
             double sB = eventWeightSums.getOrDefault(otherEventId, 0.0);
-            double sMin = getMinWeightSum(first, second);
 
             double denominator = Math.sqrt(sA) * Math.sqrt(sB);
-            double similarity = denominator > 0 ? sMin / denominator : 0.0;
+            double similarity = denominator > 0 ? updatedSmin / denominator : 0.0;
 
             EventSimilarityAvro simAvro = EventSimilarityAvro.newBuilder()
                     .setEventA(first)
