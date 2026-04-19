@@ -20,9 +20,11 @@ import ru.practicum.request.mapper.ParticipationRequestMapper;
 import ru.practicum.request.model.ParticipationRequest;
 import ru.practicum.request.repository.ConfirmedRequestView;
 import ru.practicum.request.repository.ParticipationRequestRepository;
+import ru.practicum.CollectorClient;
 import ru.practicum.user.client.UserFeignClient;
 import ru.practicum.user.dto.UserDto;
 import ru.practicum.user.repository.UserRepository;
+import stats.service.collector.ActionTypeProto;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -41,6 +43,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     private final ParticipationRequestMapper mapper;
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
+    private final CollectorClient collectorClient;
 
     @Override
     @Transactional
@@ -85,6 +88,13 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
         ParticipationRequest participationRequest = repository.save(request);
         repository.flush();
         log.info("Запрос успешно создан. Параметры: {}", participationRequest);
+
+        try {
+            collectorClient.sendUserAction(userId, eventId, ActionTypeProto.ACTION_REGISTER);
+        } catch (Exception e) {
+            log.error("Failed to send REGISTER action to collector", e);
+        }
+
         return mapper.toDto(participationRequest);
     }
 

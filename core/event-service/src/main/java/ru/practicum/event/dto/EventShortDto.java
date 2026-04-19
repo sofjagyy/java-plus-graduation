@@ -24,5 +24,5 @@ public class EventShortDto {
     private LocalDateTime eventDate;
 
     private Long confirmedRequests = 0L;
-    private Long views = 0L;
+    private double rating = 0.0;
 }

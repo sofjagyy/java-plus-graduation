@@ -19,6 +19,10 @@
         <module>stat-dto</module>
         <module>stat-server</module>
         <module>stat-client</module>
+        <module>interaction-api</module>
+        <module>collector</module>
+        <module>aggregator</module>
+        <module>analyzer</module>
     </modules>
 
 </project>
