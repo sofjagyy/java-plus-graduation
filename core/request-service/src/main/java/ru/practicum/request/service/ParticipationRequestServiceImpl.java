@@ -29,6 +29,7 @@ import stats.service.collector.ActionTypeProto;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -52,7 +53,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
             throw new DuplicatedException("Такая заявка уже создана");
         }
 
-        if (event.getInitiator().getId().equals(userId)) {
+        if (Objects.equals(event.getInitiator().getId(), userId)) {
             throw new ConflictException("Инициатор события не может добавить запрос на участие в своём событии");
         }
 
@@ -66,15 +67,16 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
             throw new ConflictException("Достигнут лимит запросов на участие");
         }
 
-        UserDto userDto = userFeignClient.getUser(userId);
-        syncUser(userDto);
-        syncEvent(event.getId());
+        userFeignClient.getUser(userId);
+        if (!Objects.equals(event.getId(), eventId)) {
+            throw new ConflictException("Event id mismatch");
+        }
 
         var user = userRepository.getReferenceById(userId);
-        var eventEntity = eventRepository.getReferenceById(event.getId());
+        var eventEntity = eventRepository.getReferenceById(eventId);
 
         RequestStatus status = RequestStatus.PENDING;
-        if (!event.getRequestModeration() || event.getParticipantLimit().equals(0)) {
+        if (!Boolean.TRUE.equals(event.getRequestModeration()) || Objects.equals(event.getParticipantLimit(), 0)) {
             status = RequestStatus.CONFIRMED;
         }
 
@@ -190,21 +192,4 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
                 .collect(Collectors.toList());
     }
 
-    private void syncUser(UserDto userDto) {
-        if (!userRepository.existsById(userDto.getId())) {
-            ru.practicum.user.model.User user = new ru.practicum.user.model.User();
-            user.setId(userDto.getId());
-            user.setName(userDto.getName());
-            user.setEmail(userDto.getEmail());
-            userRepository.save(user);
-        }
-    }
-
-    private void syncEvent(Long eventId) {
-        if (!eventRepository.existsById(eventId)) {
-            ru.practicum.event.model.Event event = new ru.practicum.event.model.Event();
-            event.setId(eventId);
-            eventRepository.save(event);
-        }
-    }
 }
