@@ -15,6 +15,9 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+execution-report.txt
+collection-report.txt
+
 ### IntelliJ IDEA ###
 .idea
 *.iws

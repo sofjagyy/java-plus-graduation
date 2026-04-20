@@ -1,18 +1,16 @@
 package ru.practicum.event.service;
 
 import com.querydsl.core.BooleanBuilder;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.practicum.StatClient;
+import ru.practicum.AnalyzerClient;
+import ru.practicum.CollectorClient;
 import ru.practicum.category.model.Category;
 import ru.practicum.category.repository.CategoryRepository;
-import ru.practicum.dto.EndpointHitDto;
-import ru.practicum.dto.ViewStatsDto;
 import ru.practicum.event.dto.*;
 import ru.practicum.event.mapper.EventMapper;
 import ru.practicum.event.model.Event;
@@ -29,12 +27,13 @@ import ru.practicum.user.client.UserFeignClient;
 import ru.practicum.user.dto.UserDto;
 import ru.practicum.user.model.User;
 import ru.practicum.user.repository.UserRepository;
+import stats.service.collector.ActionTypeProto;
+import stats.service.dashboard.RecommendedEventProto;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 @Slf4j
 @Service
@@ -45,7 +44,8 @@ public class EventServiceImpl implements EventService {
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
-    private final StatClient statClient;
+    private final CollectorClient collectorClient;
+    private final AnalyzerClient analyzerClient;
     private final EventMapper eventMapper;
     private final UserFeignClient userFeignClient;
     private final RequestFeignClient requestFeignClient;
@@ -112,8 +112,6 @@ public class EventServiceImpl implements EventService {
 
     @Override
     public List<EventShortDto> getEventsPublic(EventPublicFilterParams params) {
-        sendStat(params.getRequest());
-
         BooleanBuilder builder = new BooleanBuilder();
         QEvent qEvent = QEvent.event;
 
@@ -144,60 +142,28 @@ public class EventServiceImpl implements EventService {
 
         Sort sortOrder = Sort.by(Sort.Direction.ASC, "eventDate");
 
-        if ("VIEWS".equals(params.getSort())) {
-            List<Event> events = StreamSupport.stream(eventRepository.findAll(builder).spliterator(), false)
-                    .collect(Collectors.toList());
-
-            Map<Long, Long> views = getViews(events);
-            Map<Long, Long> confirmedRequests = getConfirmedRequests(events);
-            List<EventShortDto> result = new ArrayList<>();
-
-            for (Event event : events) {
-                EventShortDto dto = eventMapper.toShortDto(event);
-                dto.setViews(views.getOrDefault(event.getId(), 0L));
-                dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0L));
-                result.add(dto);
-            }
-
-            result.sort(Comparator.comparing(EventShortDto::getViews).reversed());
-
-            int from = params.getFrom();
-            int size = params.getSize();
-            int toIndex = Math.min(from + size, result.size());
-
-            if (from >= result.size()) {
-                return Collections.emptyList();
-            }
-
-            return result.subList(from, toIndex);
-        }
-
         PageRequest pageRequest = PageRequest.of(params.getFrom() / params.getSize(), params.getSize(), sortOrder);
         List<Event> events = eventRepository.findAll(builder, pageRequest).getContent();
 
-        Map<Long, Long> views = getViews(events);
-        Map<Long, Long> confirmedRequests = getConfirmedRequests(events);
-        List<EventShortDto> result = new ArrayList<>();
-
-        for (Event event : events) {
-            EventShortDto dto = eventMapper.toShortDto(event);
-            dto.setViews(views.getOrDefault(event.getId(), 0L));
-            dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0L));
-            result.add(dto);
-        }
-
-        return result;
+        return makeEventShortDtoList(events);
     }
 
     @Override
-    public EventFullDto getEventPublic(Long id, HttpServletRequest request) {
+    public EventFullDto getEventPublic(Long id, Long userId) {
         Event event = getEventByIdOrThrow(id);
 
         if (event.getState() != EventState.PUBLISHED) {
             throw new NotFoundException("Event must be published");
         }
 
-        sendStat(request);
+        if (userId != null) {
+            try {
+                collectorClient.sendUserAction(userId, id, ActionTypeProto.ACTION_VIEW);
+            } catch (Exception e) {
+                log.error("Error sending view action to collector", e);
+            }
+        }
+
         return toEventFullDtoWithStats(event);
     }
 
@@ -314,27 +280,36 @@ public class EventServiceImpl implements EventService {
         return LocalDateTime.parse(time, FORMATTER);
     }
 
-    private void sendStat(HttpServletRequest request) {
+    @Override
+    public List<EventShortDto> getRecommendations(Long userId, int maxResults) {
         try {
-            EndpointHitDto hit = new EndpointHitDto();
-            hit.setApp("ewm-main-service");
-            hit.setUri(request.getRequestURI());
-            hit.setIp(request.getRemoteAddr());
-            hit.setTimestamp(LocalDateTime.now().format(FORMATTER));
-            statClient.hit(hit);
+            List<Long> recommendedIds = analyzerClient.getRecommendationsForUser(userId, maxResults)
+                    .map(RecommendedEventProto::getEventId)
+                    .collect(Collectors.toList());
+            if (recommendedIds.isEmpty()) return Collections.emptyList();
+            List<Event> events = eventRepository.findAllById(recommendedIds);
+            return makeEventShortDtoList(events);
         } catch (Exception e) {
-            log.error("Error sending stat", e);
+            log.error("Error getting recommendations", e);
+            return Collections.emptyList();
         }
     }
 
+    @Override
+    @Transactional
+    public void likeEvent(Long userId, Long eventId) {
+        checkUser(userId);
+        collectorClient.sendUserAction(userId, eventId, ActionTypeProto.ACTION_LIKE);
+    }
+
     private List<EventFullDto> makeEventFullDtoList(List<Event> events) {
-        Map<Long, Long> views = getViews(events);
+        Map<Long, Double> ratings = getRatings(events);
         Map<Long, Long> confirmedRequests = getConfirmedRequests(events);
 
         return events.stream()
                 .map(event -> {
                     EventFullDto dto = eventMapper.toFullDto(event);
-                    dto.setViews(views.getOrDefault(event.getId(), 0L));
+                    dto.setRating(ratings.getOrDefault(event.getId(), 0.0));
                     dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0L));
                     return dto;
                 })
@@ -342,13 +317,13 @@ public class EventServiceImpl implements EventService {
     }
 
     private List<EventShortDto> makeEventShortDtoList(List<Event> events) {
-        Map<Long, Long> views = getViews(events);
+        Map<Long, Double> ratings = getRatings(events);
         Map<Long, Long> confirmedRequests = getConfirmedRequests(events);
 
         return events.stream()
                 .map(event -> {
                     EventShortDto dto = eventMapper.toShortDto(event);
-                    dto.setViews(views.getOrDefault(event.getId(), 0L));
+                    dto.setRating(ratings.getOrDefault(event.getId(), 0.0));
                     dto.setConfirmedRequests(confirmedRequests.getOrDefault(event.getId(), 0L));
                     return dto;
                 })
@@ -359,27 +334,18 @@ public class EventServiceImpl implements EventService {
         return makeEventFullDtoList(List.of(event)).get(0);
     }
 
-    private Map<Long, Long> getViews(List<Event> events) {
+    private Map<Long, Double> getRatings(List<Event> events) {
         if (events.isEmpty()) return Collections.emptyMap();
 
-        Map<Long, Long> views = new HashMap<>();
-        List<String> uris = events.stream()
-                .map(event -> "/events/" + event.getId())
-                .collect(Collectors.toList());
-
+        List<Long> eventIds = events.stream().map(Event::getId).collect(Collectors.toList());
+        Map<Long, Double> ratings = new HashMap<>();
         try {
-            List<ViewStatsDto> stats = statClient.getStat(LocalDateTime.now().minusYears(100), LocalDateTime.now().plusYears(100), uris, true);
-            for (ViewStatsDto stat : stats) {
-                String[] parts = stat.getUri().split("/");
-                if (parts.length >= 3) {
-                    Long eventId = Long.parseLong(parts[2]);
-                    views.put(eventId, stat.getHits());
-                }
-            }
+            analyzerClient.getInteractionsCount(eventIds)
+                    .forEach(r -> ratings.put(r.getEventId(), r.getScore()));
         } catch (Exception e) {
-            log.error("Error getting stats", e);
+            log.error("Error getting ratings from analyzer", e);
         }
-        return views;
+        return ratings;
     }
 
     private Map<Long, Long> getConfirmedRequests(List<Event> events) {

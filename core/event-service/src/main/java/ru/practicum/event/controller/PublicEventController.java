@@ -1,6 +1,5 @@
 package ru.practicum.event.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
@@ -32,8 +31,7 @@ public class PublicEventController {
                                          @RequestParam(defaultValue = "false") Boolean onlyAvailable,
                                          @RequestParam(required = false) String sort,
                                          @RequestParam(defaultValue = "0") @PositiveOrZero int from,
-                                         @RequestParam(defaultValue = "10") @Positive int size,
-                                         HttpServletRequest request) {
+                                         @RequestParam(defaultValue = "10") @Positive int size) {
         log.info("Get events public text={}, categories={}, paid={}, start={}, end={}, avail={}, sort={}, from={}, size={}",
                 text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
 
@@ -47,15 +45,30 @@ public class PublicEventController {
                 .sort(sort)
                 .from(from)
                 .size(size)
-                .request(request)
                 .build();
 
         return eventService.getEventsPublic(params);
     }
 
+    @GetMapping("/recommendations")
+    public List<EventShortDto> getRecommendations(
+            @RequestHeader("X-EWM-USER-ID") long userId,
+            @RequestParam(defaultValue = "10") @Positive int maxResults) {
+        log.info("Get recommendations for userId={}", userId);
+        return eventService.getRecommendations(userId, maxResults);
+    }
+
     @GetMapping("/{id}")
-    public EventFullDto getEvent(@PathVariable Long id, HttpServletRequest request) {
-        log.info("Get event public id={}", id);
-        return eventService.getEventPublic(id, request);
+    public EventFullDto getEvent(@PathVariable Long id,
+                                 @RequestHeader(value = "X-EWM-USER-ID", required = false) Long userId) {
+        log.info("Get event public id={}, userId={}", id, userId);
+        return eventService.getEventPublic(id, userId);
+    }
+
+    @PutMapping("/{eventId}/like")
+    public void likeEvent(@PathVariable Long eventId,
+                          @RequestHeader("X-EWM-USER-ID") long userId) {
+        log.info("Like event eventId={}, userId={}", eventId, userId);
+        eventService.likeEvent(userId, eventId);
     }
 }

@@ -1,0 +1,121 @@
+spring:
+  application:
+    name: tester
+  main:
+    banner-mode: off
+    log-startup-info: false
+  cloud:
+    service-registry:
+      auto-registration:
+        enabled: false
+
+eureka:
+  client:
+    registerWithEureka: false
+    fetchRegistry: true
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+grpc:
+  client:
+    collector:
+      address: discovery:///collector
+      negotiationType: plaintext
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+    analyzer:
+      address: discovery:///analyzer
+      negotiationType: plaintext
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+
+logging.level:
+#  root: ERROR
+  org.springframework: ERROR
+  org.apache: ERROR
+  net.devh: ERROR
+  com.netflix: ERROR
+  ru.practicum: TRACE
+#  'Лог выполнения': INFO
+
+tester:
+  # --------------------------- #
+  # Настройки генерации данных  #
+  # --------------------------- #
+  generation:
+    # Случайное количество уникальных пользователей,
+    # которое будет сгенерировано в указанном диапазоне.
+    user-count: 5 - 15
+
+    # Случайное количество различных мероприятий,
+    # которые будут сгенерированы в указанном диапазоне.
+    event-count: 10 - 20
+
+    # Лимит суммарного количества действий с мероприятиями
+    # то есть верхний лимит генерации действий для выбранного,
+    # с помощью настроек выше, случайного количества
+    # пользователей и мероприятий
+    actions-limit: 50 - 100
+
+    # Параметры временных меток генерируемых данных
+    timestamp-settings:
+      # Насколько «назад» во времени смещается первая метка (от текущего момента).
+      # Значение парсится в Duration так, что можно использовать разные обозначения
+      back: 3d
+      # Минимальный интервал между последовательными метками.
+      increment-start: 1m
+      # Максимальный интервал между последовательными метками.
+      increment-end: 10m
+
+  # --------------------------- #
+  # Настройки выполнения тестов #
+  # --------------------------- #
+  execution:
+    # Режим проверки:
+    #   - COLLECTION   – только collector
+    #   - AGGREGATION  – collector + aggregator
+    #   - ANALYZE      – collector + aggregator + analyzer
+    mode: AGGREGATION
+
+    # Логировать сразу в консоль (т.е. помимо сохранения в отчет,
+    # который выводится только в конце работы)
+    immediate-logging.enabled: false
+
+    # Настройки вывода результатов
+    output:
+      # Печатать сообщения уровня info (если false, то будут выводиться только ошибки).
+      info-enabled: true
+      # Печатать TRACE‑сообщения.
+      trace-enabled: true
+      # Выводить отчёт в консоль.
+      print: true
+      # Сохранять отчёт в файл.
+      file: true
+      # Путь к файлу отчёта.
+      file-path: "./execution-report.txt"
+
+    # Относительные «веса» действий пользователей с мероприятиями
+    action-weight:
+      view: 0.4
+      registered: 0.8
+      like: 1.0
+
+  kafka:
+    properties:
+      common:
+        "bootstrap.servers": localhost:9092
+        "enable.auto.commit": false
+        "auto.offset.reset": earliest
+        "value.deserializer": "org.apache.kafka.common.serialization.ByteArrayDeserializer"
+      actions:
+        "max.poll.records": 1
+        "key.deserializer": "org.apache.kafka.common.serialization.LongDeserializer"
+        "group.id": "user-action-consumer"
+      similarities:
+        "key.deserializer": "org.apache.kafka.common.serialization.StringDeserializer"
+        "max.poll.records": 1000
+        "group.id": "similarity-consumer"
+    poll-timeout: 10s
+    topics:
+      user-actions: "stats.user-actions.v1"
+      events-similarity: "stats.events-similarity.v1"

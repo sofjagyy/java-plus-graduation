@@ -1,6 +1,5 @@
 package ru.practicum.event.service;
 
-import jakarta.servlet.http.HttpServletRequest;
 import ru.practicum.event.dto.*;
 
 import java.util.List;
@@ -12,7 +11,7 @@ public interface EventService {
 
     List<EventShortDto> getEventsPublic(EventPublicFilterParams params);
 
-    EventFullDto getEventPublic(Long id, HttpServletRequest request);
+    EventFullDto getEventPublic(Long id, Long userId);
 
     List<EventShortDto> getEventsUser(Long userId, int from, int size);
 
@@ -25,4 +24,8 @@ public interface EventService {
     EventFullDto getEventById(Long eventId);
 
     List<EventShortDto> getEventsByIds(List<Long> ids);
+
+    List<EventShortDto> getRecommendations(Long userId, int maxResults);
+
+    void likeEvent(Long userId, Long eventId);
 }

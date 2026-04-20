@@ -20,13 +20,16 @@ import ru.practicum.request.mapper.ParticipationRequestMapper;
 import ru.practicum.request.model.ParticipationRequest;
 import ru.practicum.request.repository.ConfirmedRequestView;
 import ru.practicum.request.repository.ParticipationRequestRepository;
+import ru.practicum.CollectorClient;
 import ru.practicum.user.client.UserFeignClient;
 import ru.practicum.user.dto.UserDto;
 import ru.practicum.user.repository.UserRepository;
+import stats.service.collector.ActionTypeProto;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -41,6 +44,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
     private final ParticipationRequestMapper mapper;
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
+    private final CollectorClient collectorClient;
 
     @Override
     @Transactional
@@ -49,7 +53,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
             throw new DuplicatedException("Такая заявка уже создана");
         }
 
-        if (event.getInitiator().getId().equals(userId)) {
+        if (Objects.equals(event.getInitiator().getId(), userId)) {
             throw new ConflictException("Инициатор события не может добавить запрос на участие в своём событии");
         }
 
@@ -71,7 +75,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
         var eventEntity = eventRepository.getReferenceById(event.getId());
 
         RequestStatus status = RequestStatus.PENDING;
-        if (!event.getRequestModeration() || event.getParticipantLimit().equals(0)) {
+        if (!Boolean.TRUE.equals(event.getRequestModeration()) || Objects.equals(event.getParticipantLimit(), 0)) {
             status = RequestStatus.CONFIRMED;
         }
 
@@ -85,6 +89,13 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
         ParticipationRequest participationRequest = repository.save(request);
         repository.flush();
         log.info("Запрос успешно создан. Параметры: {}", participationRequest);
+
+        try {
+            collectorClient.sendUserAction(userId, eventId, ActionTypeProto.ACTION_REGISTER);
+        } catch (Exception e) {
+            log.error("Failed to send REGISTER action to collector", e);
+        }
+
         return mapper.toDto(participationRequest);
     }
 
@@ -186,7 +197,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
             user.setId(userDto.getId());
             user.setName(userDto.getName());
             user.setEmail(userDto.getEmail());
-            userRepository.save(user);
+            userRepository.saveAndFlush(user);
         }
     }
 
@@ -194,7 +205,7 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
         if (!eventRepository.existsById(eventId)) {
             ru.practicum.event.model.Event event = new ru.practicum.event.model.Event();
             event.setId(eventId);
-            eventRepository.save(event);
+            eventRepository.saveAndFlush(event);
         }
     }
 }

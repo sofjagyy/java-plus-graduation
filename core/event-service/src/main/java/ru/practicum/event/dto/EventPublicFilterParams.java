@@ -1,6 +1,5 @@
 package ru.practicum.event.dto;
 
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,5 +21,4 @@ public class EventPublicFilterParams {
     private String sort;
     private Integer from;
     private Integer size;
-    private HttpServletRequest request;
 }
