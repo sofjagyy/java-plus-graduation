@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import ru.practicum.analyzer.model.UserAction;
 import ru.practicum.analyzer.model.UserActionId;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,9 +18,21 @@ public interface UserActionRepository extends JpaRepository<UserAction, UserActi
 
     Optional<UserAction> findByUserIdAndEventId(Long userId, Long eventId);
 
+    List<UserAction> findByUserIdAndEventIdIn(Long userId, Collection<Long> eventIds);
+
     @Query("SELECT ua.eventId FROM UserAction ua WHERE ua.userId = :userId")
     List<Long> findEventIdsByUserId(@Param("userId") Long userId);
 
     @Query("SELECT COALESCE(SUM(ua.maxWeight), 0) FROM UserAction ua WHERE ua.eventId = :eventId")
     Double sumMaxWeightByEventId(@Param("eventId") Long eventId);
+
+    @Query("SELECT ua.eventId AS eventId, COALESCE(SUM(ua.maxWeight), 0) AS total "
+            + "FROM UserAction ua WHERE ua.eventId IN :eventIds GROUP BY ua.eventId")
+    List<EventWeightSum> sumMaxWeightByEventIds(@Param("eventIds") Collection<Long> eventIds);
+
+    interface EventWeightSum {
+        Long getEventId();
+
+        Double getTotal();
+    }
 }

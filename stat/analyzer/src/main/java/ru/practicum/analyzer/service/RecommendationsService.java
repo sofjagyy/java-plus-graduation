@@ -12,6 +12,7 @@ import stats.service.dashboard.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @GrpcService
 @Slf4j
@@ -63,12 +64,38 @@ public class RecommendationsService extends RecommendationsControllerGrpc.Recomm
                 .toList();
 
         int k = 5;
+
+        Set<Long> candidateSet = new HashSet<>(candidates);
+        List<EventSimilarity> candidateSimilarities = candidates.isEmpty()
+                ? List.of()
+                : similarityRepository.findByEventIds(candidates);
+
+        Map<Long, List<EventSimilarity>> simsByCandidate = new HashMap<>();
+        for (EventSimilarity sim : candidateSimilarities) {
+            long a = sim.getEventA();
+            long b = sim.getEventB();
+            if (candidateSet.contains(a) && interactedEvents.contains(b)) {
+                simsByCandidate.computeIfAbsent(a, id -> new ArrayList<>()).add(sim);
+            }
+            if (candidateSet.contains(b) && interactedEvents.contains(a)) {
+                simsByCandidate.computeIfAbsent(b, id -> new ArrayList<>()).add(sim);
+            }
+        }
+
+        Set<Long> neighborIds = simsByCandidate.values().stream()
+                .flatMap(Collection::stream)
+                .flatMap(s -> Stream.of(s.getEventA(), s.getEventB()))
+                .filter(interactedEvents::contains)
+                .collect(Collectors.toSet());
+
+        Map<Long, Double> weightByNeighbor = neighborIds.isEmpty()
+                ? Map.of()
+                : userActionRepository.findByUserIdAndEventIdIn(userId, neighborIds).stream()
+                .collect(Collectors.toMap(UserAction::getEventId, UserAction::getMaxWeight));
+
         for (long candidateId : candidates) {
-            List<EventSimilarity> neighborSims = similarityRepository.findByEventId(candidateId).stream()
-                    .filter(s -> {
-                        long otherId = s.getEventA().equals(candidateId) ? s.getEventB() : s.getEventA();
-                        return interactedEvents.contains(otherId);
-                    })
+            List<EventSimilarity> neighborSims = simsByCandidate.getOrDefault(candidateId, List.of()).stream()
+                    .sorted(Comparator.comparingDouble(EventSimilarity::getScore).reversed())
                     .limit(k)
                     .toList();
 
@@ -76,9 +103,9 @@ public class RecommendationsService extends RecommendationsControllerGrpc.Recomm
             double simSum = 0;
             for (EventSimilarity ns : neighborSims) {
                 long neighborId = ns.getEventA().equals(candidateId) ? ns.getEventB() : ns.getEventA();
-                UserAction ua = userActionRepository.findByUserIdAndEventId(userId, neighborId).orElse(null);
-                if (ua == null) continue;
-                weightedSum += ns.getScore() * ua.getMaxWeight();
+                Double weight = weightByNeighbor.get(neighborId);
+                if (weight == null) continue;
+                weightedSum += ns.getScore() * weight;
                 simSum += ns.getScore();
             }
 
@@ -128,11 +155,21 @@ public class RecommendationsService extends RecommendationsControllerGrpc.Recomm
                                      StreamObserver<RecommendedEventProto> responseObserver) {
         log.info("GetInteractionsCount for {} events", request.getEventIdCount());
 
-        for (long eventId : request.getEventIdList()) {
-            double totalWeight = userActionRepository.sumMaxWeightByEventId(eventId);
+        List<Long> eventIds = request.getEventIdList();
+        if (eventIds.isEmpty()) {
+            responseObserver.onCompleted();
+            return;
+        }
+
+        Map<Long, Double> totals = userActionRepository.sumMaxWeightByEventIds(eventIds).stream()
+                .collect(Collectors.toMap(
+                        UserActionRepository.EventWeightSum::getEventId,
+                        UserActionRepository.EventWeightSum::getTotal));
+
+        for (long eventId : eventIds) {
             responseObserver.onNext(RecommendedEventProto.newBuilder()
                     .setEventId(eventId)
-                    .setScore(totalWeight)
+                    .setScore(totals.getOrDefault(eventId, 0.0))
                     .build());
         }
 
