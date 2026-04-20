@@ -67,13 +67,12 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
             throw new ConflictException("Достигнут лимит запросов на участие");
         }
 
-        userFeignClient.getUser(userId);
-        if (!Objects.equals(event.getId(), eventId)) {
-            throw new ConflictException("Event id mismatch");
-        }
+        UserDto userDto = userFeignClient.getUser(userId);
+        syncUser(userDto);
+        syncEvent(event.getId());
 
         var user = userRepository.getReferenceById(userId);
-        var eventEntity = eventRepository.getReferenceById(eventId);
+        var eventEntity = eventRepository.getReferenceById(event.getId());
 
         RequestStatus status = RequestStatus.PENDING;
         if (!Boolean.TRUE.equals(event.getRequestModeration()) || Objects.equals(event.getParticipantLimit(), 0)) {
@@ -192,4 +191,21 @@ public class ParticipationRequestServiceImpl implements ParticipationRequestServ
                 .collect(Collectors.toList());
     }
 
+    private void syncUser(UserDto userDto) {
+        if (!userRepository.existsById(userDto.getId())) {
+            ru.practicum.user.model.User user = new ru.practicum.user.model.User();
+            user.setId(userDto.getId());
+            user.setName(userDto.getName());
+            user.setEmail(userDto.getEmail());
+            userRepository.saveAndFlush(user);
+        }
+    }
+
+    private void syncEvent(Long eventId) {
+        if (!eventRepository.existsById(eventId)) {
+            ru.practicum.event.model.Event event = new ru.practicum.event.model.Event();
+            event.setId(eventId);
+            eventRepository.saveAndFlush(event);
+        }
+    }
 }
